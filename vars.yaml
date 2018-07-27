@@ -1,0 +1,3 @@
+base_domain: cc.test.local
+base_directory: "/opt/data"
+tmp_dir: "/tmp"

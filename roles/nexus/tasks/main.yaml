@@ -1,0 +1,77 @@
+---
+
+- name: add group
+  group:
+    name: "{{ nexus_group }}"
+
+
+- name: add user
+  user:
+    name: "{{ nexus_user }}"
+    group: "{{ nexus_group }}"
+    shell: /bin/bash
+    home: "{{ nexus_home }}"
+
+
+- name: create home directory
+  file:
+    path: "{{ nexus_home }}"
+    state: directory
+
+
+- name: copy docker compose file
+  template:
+    src: "docker-compose.yaml.j2"
+    dest: "{{ nexus_docker_compose_dest }}"
+
+
+- name: add ubuntu user to docker group
+  user:
+    name: nexus
+    groups: docker
+    append: yes
+
+
+- name: service restart
+  service:
+    name: docker
+    state: restarted
+
+
+- name: docker-compose up
+  shell:
+    cmd: docker-compose up -d
+    chdir: "{{ nexus_home }}"
+
+- name: check port state
+  wait_for:
+    port: 9091
+    delay: 60
+    state: started
+
+
+- name: copy nexus cfg file
+  copy:
+    src: "{{ item }}.json"
+    dest: '/tmp/{{ item }}.json'
+  with_items:
+    "{{ nexus_cfg_files }}"
+
+
+- name: add cfg files to nexus
+  shell:
+    cmd: "curl -u {{ nexus_login_user }}:{{ nexus_login_user }} -X POST 
+          --header 'Content-Type: application/json' 
+          http://localhost:{{ nexus_port }}/service/rest/v1/script 
+          -d @/tmp/{{ item }}.json"
+  with_items:
+    "{{ nexus_cfg_files }}"
+
+
+- name: exec nexus scripts
+  shell:
+    cmd: "curl -v -X POST -u {{ nexus_login_user }}:{{ nexus_login_user }} 
+          --header 'Content-Type: text/plain' 
+          http://localhost:{{ nexus_port }}/service/rest/v1/script/{{ item }}/run"
+  with_items:
+    "{{ nexus_cfg_files }}"
